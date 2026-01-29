@@ -1,0 +1,86 @@
+version: 2
+
+macros:
+
+  - name: categorize_news
+    description: >
+      Categorizes a news title into a high-level topic based on keyword matching.
+
+      Categories:
+      - **Crypto**: title contains 'crypto'
+      - **Stock**: title contains 'stock'
+      - **Market**: title contains 'market'
+      - **General**: fallback category
+
+      The comparison is case-insensitive.
+
+      Example:
+      ```sql
+      select
+        title,
+        categorize_news('title') as category
+      from news_articles
+      ```
+
+    arguments:
+      - name: title
+        type: string
+        description: >
+          Column or expression containing the news title to categorize.
+
+  - name: generate_base_model
+    description: >
+      Generates a base SELECT statement for a given dbt source table.
+
+      This macro:
+      - Reads column metadata from the source relation
+      - Lowercases all column names
+      - Produces a clean base model for staging layers
+
+      Intended usage:
+      - `stg_*` or `base_*` models
+      - Thin models with no business logic
+
+      Example:
+      ```sql
+      generate_base_model('raw_news', 'articles')
+      ```
+
+    arguments:
+      - name: source_name
+        type: string
+        description: >
+          Name of the dbt source as defined in `sources.yml`.
+
+      - name: table_name
+        type: string
+        description: >
+          Name of the table within the source.
+
+  - name: hash_key
+    description: >
+      Generates a deterministic SHA-256 hash key from one or more columns.
+
+      Behavior:
+      - Null-safe (NULL values are treated as empty strings)
+      - Column values are cast to `varchar`
+      - Columns are concatenated using `||` as a delimiter
+      - Output is a binary SHA-256 hash
+
+      Common use cases:
+      - Surrogate keys
+      - Dimension primary keys
+      - Fact foreign keys
+
+      ⚠️ Column order matters — changing the order changes the hash.
+
+      Example:
+      ```sql
+      hash_key(['customer_id', 'account_id'])
+      ```
+
+    arguments:
+      - name: columns
+        type: list[string]
+        description: >
+          Ordered list of column names or SQL expressions to hash together.

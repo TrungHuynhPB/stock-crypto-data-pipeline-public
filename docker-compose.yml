@@ -1,0 +1,342 @@
+services:
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    container_name: capstone-timescaledb
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - timescaledb_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - app_net
+
+  prefect_db:
+    image: postgres:14-alpine
+    container_name: capstone-prefect-db
+    environment:
+      POSTGRES_DB: ${PREFECT_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5433:5432" # Exposed on 5433 to avoid conflict with TimescaleDB's 5432
+    volumes:
+      - prefect_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${PREFECT_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+  
+  # prefect-worker:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.ingestion
+  #   container_name: capstone-prefect-worker
+  #   command: prefect worker start --pool default
+  #   environment:
+  #     PREFECT_API_URL: ${PREFECT_API_URL}
+  #     POSTGRES_DB: ${POSTGRES_DB}
+  #     POSTGRES_USER: ${POSTGRES_USER}
+  #     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+  #     TSDB_HOST: timescaledb
+  #     MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+  #     MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+  #     MINIO_HOST: minio
+  #   volumes:
+  #     - .:/app
+  #   depends_on:
+  #     prefect:
+  #       condition: service_started
+  #   restart: unless-stopped
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: capstone-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
+    ports:
+    - "5050:80"
+    depends_on:
+    - timescaledb
+    - prefect_db
+    restart: unless-stopped
+    networks:
+    - app_net
+
+  minio:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    container_name: capstone-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    ports:
+    - "9000:9000"
+    - "9001:9001"
+    volumes:
+    - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://0.0.0.0:9000/minio/health/live"]
+      interval: 10s
+      retries: 5
+    restart: unless-stopped
+
+  prefect:
+    image: prefecthq/prefect:3-latest
+    container_name: capstone-prefect
+    depends_on:
+      prefect_db:
+        condition: service_healthy 
+    command: prefect server start --host 0.0.0.0
+    ports:
+    - "4200:4200"
+    environment:
+      PREFECT_API_URL: ${PREFECT_API_URL}
+      PREFECT_API_DATABASE_CONNECTION_URL: "postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@prefect_db:5432/${PREFECT_DB}"
+    #volumes:
+    #- ./secrets:/etc/secrets:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://0.0.0.0:4200/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  trino:
+    image: trinodb/trino:476
+    container_name: capstone-trino
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./docker/trino/etc:/etc/trino
+      - ./docker/trino/catalog:/etc/trino/catalog
+      - ./docker/trino/secrets:/secrets:ro
+    environment:
+      - _JAVA_OPTIONS=-Dfile.encoding=UTF-8 -Dnet.snowflake.jdbc.enableBouncyCastle=TRUE -Dorg.bouncycastle.asn1.allow_unsafe_integer=true
+    depends_on:
+      - timescaledb
+    networks:
+      - app_net
+
+  # Kafka Infrastructure
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: capstone-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - app_net
+    restart: unless-stopped
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: capstone-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://kafka:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    networks:
+      - app_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kafka-producer:
+    build:
+      context: .
+      dockerfile: docker/kafka-producer/Dockerfile
+    container_name: capstone-kafka-producer
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9093
+      KAFKA_TOPIC_TRANSACTIONS: ${KAFKA_TOPIC_TRANSACTIONS:-transactions}
+      KAFKA_TOPIC_TRANSACTION_CORPORATE: ${KAFKA_TOPIC_TRANSACTION_CORPORATE:-${KAFKA_TOPIC_TRANSACTIONS:-transactions}_corporates}
+      KAFKA_TOPIC_TRANSACTION_CUSTOMER: ${KAFKA_TOPIC_TRANSACTION_CUSTOMER:-${KAFKA_TOPIC_TRANSACTIONS:-transactions}_customers}
+      KAFKA_TOPIC_CUSTOMERS: ${KAFKA_TOPIC_CUSTOMERS:-customers}
+      KAFKA_TOPIC_CORPORATES: ${KAFKA_TOPIC_CORPORATE:-corporates}
+      NUM_CUSTOMERS: ${NUM_CUSTOMERS:-1000}
+      NUM_CORPORATES: ${NUM_CORPORATES:-100}
+      NUM_STOCK_TRANSACTIONS_PER_BATCH: ${NUM_STOCK_TRANSACTIONS_PER_BATCH:-100}
+      NUM_CRYPTO_TRANSACTIONS_PER_BATCH: ${NUM_CRYPTO_TRANSACTIONS_PER_BATCH:-60}
+      BATCH_INTERVAL_SECONDS: ${BATCH_INTERVAL_SECONDS:-60}
+      DAYS_BACK: ${DAYS_BACK:-90}
+    volumes:
+      - ./scripts:/app/scripts
+      - ./seeds:/app/seeds
+    networks:
+      - app_net
+    restart: unless-stopped
+
+  kafka-consumer:
+    build:
+      context: .
+      dockerfile: docker/kafka-consumer/Dockerfile
+    container_name: capstone-kafka-consumer
+    depends_on:
+      kafka:
+        condition: service_healthy
+      timescaledb:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9093
+      KAFKA_TOPIC_TRANSACTIONS: ${KAFKA_TOPIC_TRANSACTIONS:-transactions}
+      KAFKA_TOPIC_TRANSACTION_CORPORATE: ${KAFKA_TOPIC_TRANSACTION_CORPORATE:-${KAFKA_TOPIC_TRANSACTIONS:-transactions}_corporates}
+      KAFKA_TOPIC_TRANSACTION_CUSTOMER: ${KAFKA_TOPIC_TRANSACTION_CUSTOMER:-${KAFKA_TOPIC_TRANSACTIONS:-transactions}_customers}
+      KAFKA_TOPIC_CUSTOMERS: ${KAFKA_TOPIC_CUSTOMERS:-customers}
+      KAFKA_TOPIC_CORPORATES: ${KAFKA_TOPIC_CORPORATE:-corporates}
+      KAFKA_CONSUMER_BATCH_SIZE: ${KAFKA_CONSUMER_BATCH_SIZE:-100}
+      KAFKA_CONSUMER_BATCH_TIMEOUT: ${KAFKA_CONSUMER_BATCH_TIMEOUT:-30}
+      TSDB_HOST: timescaledb
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_SCHEMA: ${POSTGRES_SCHEMA}
+    volumes:
+      - ./scripts:/app/scripts
+      - ./secrets:/app/secrets:ro
+    networks:
+      - app_net
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v2.50.0
+    container_name: capstone-prometheus
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+    networks:
+      - app_net
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:10.3.1
+    container_name: capstone-grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GF_SECURITY_ADMIN_USER}
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    depends_on:
+      - prometheus
+    networks:
+      - app_net
+    restart: unless-stopped
+
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:v1.7.0
+    container_name: capstone-kafka-exporter
+    depends_on:
+      kafka:
+        condition: service_healthy
+    command:
+      - "--kafka.server=kafka:9093"
+      - "--group.filter=.*"
+      - "--topic.filter=.*"
+    ports:
+      - "9308:9308"
+    networks:
+      - app_net
+    restart: unless-stopped
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: capstone-postgres-exporter
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@timescaledb:5432/${POSTGRES_DB}?sslmode=disable"
+    ports:
+      - "9187:9187"
+    networks:
+      - app_net
+    restart: unless-stopped
+
+  postgres-exporter-prefect:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: capstone-postgres-exporter-prefect
+    depends_on:
+      prefect_db:
+        condition: service_healthy
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@prefect_db:5432/${PREFECT_DB}?sslmode=disable"
+    ports:
+      - "9188:9187"
+    networks:
+      - app_net
+    restart: unless-stopped
+
+  langgraph-postgres:
+    image: postgres:17.4
+    container_name: capstone-langgraph-postgres
+    environment:
+      POSTGRES_USER: ${LANGGRAPH_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${LANGGRAPH_POSTGRES_PASSWORD}
+      POSTGRES_DB: ${LANGGRAPH_POSTGRES_DB}
+    ports:
+      - "${LANGGRAPH_POSTGRES_PORT}:5432"
+    volumes:
+      - langgraph_postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${LANGGRAPH_POSTGRES_USER:-postgres} -d ${LANGGRAPH_POSTGRES_DB:-langgraph_memory}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  timescaledb_data:
+    driver: local
+  minio_data:
+    driver: local
+  prefect_db_data:
+    driver: local
+  langgraph_postgres_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+networks:
+  app_net:
+    driver: bridge

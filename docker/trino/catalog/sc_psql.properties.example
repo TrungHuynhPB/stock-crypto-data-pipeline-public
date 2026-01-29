@@ -1,0 +1,4 @@
+connector.name=postgresql
+connection-url=jdbc:postgresql://timescaledb:5432/stock_data
+connection-user=username_postgresql
+connection-password=password_postgresql

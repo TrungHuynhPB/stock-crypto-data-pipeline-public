@@ -1,0 +1,979 @@
+version: 2
+
+models:
+
+  # ======================
+  # HUBS
+  # ======================
+
+  - name: hub_customer
+    description: >
+      Hub table containing unique business keys for customers.
+      ```sql
+      SELECT
+        customer_hk,
+        customer_id,
+        load_timestamp,
+        record_source
+      FROM raw_sf.hub_customer
+      LIMIT 100;
+      ```
+    meta:
+      owner: "@dataops_team"
+    columns:
+      - name: customer_hk
+        description: Hash key for customer_id.
+        data_tests: [not_null, unique]
+      - name: customer_id
+        description: Natural business key.
+        data_tests:
+          - not_null
+          - relationships:
+              to: source('raw_pg', 'raw_customers')
+              field: customer_id
+
+      - name: load_timestamp
+        description: Timestamp when the record was loaded.
+        data_tests: [not_null]
+
+      - name: record_source
+        description: Source system of the record.
+        data_tests: [not_null]
+
+  - name: hub_asset
+    description: >
+      Hub for tradable assets (crypto symbols and stock tickers).
+      ```sql
+      SELECT
+        asset_hk,
+        asset_symbol,
+        asset_type,
+        load_timestamp,
+        record_source
+      FROM raw_sf.hub_asset
+      LIMIT 100;
+      ```
+    meta:
+      owner: "@dataops_team"
+    columns:
+      - name: asset_hk
+        description: Unique hash key for the asset.
+        data_tests: [not_null, unique]
+
+      - name: asset_symbol
+        description: Ticker symbol for the asset.
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('ephemeral_asset')
+              field: asset_symbol
+
+      - name: asset_type
+        description: crypto or stock
+
+      - name: load_timestamp
+        description: Timestamp when the record was loaded.
+        data_tests: [not_null]
+
+      - name: record_source
+        description: Source system of the record.
+        data_tests: [not_null]
+
+  - name: ephemeral_asset
+    description: Ephemeral table to deduplicate tradable assets.
+      ```sql
+      SELECT
+        asset_hk,
+        asset_symbol,
+        asset_type,
+        load_timestamp,
+        record_source
+      FROM ephemeral_asset
+      ```
+    meta:
+      owner: "@dataops_team"
+    columns:
+      - name: asset_hk
+        description: Unique hash key for the asset.
+        data_tests:
+          - not_null
+
+      - name: asset_symbol
+        description: Ticker symbol for the asset.
+        data_tests: [not_null] 
+      - name: asset_type
+        description: crypto or stock
+
+      - name: load_timestamp
+        description: Timestamp when the record was loaded.
+        data_tests: [not_null]
+
+      - name: record_source
+        description: Source system of the record.
+        data_tests: [not_null]
+
+  - name: hub_transaction
+    description: Hub for customer transactions.
+      ```sql
+      SELECT
+        transaction_hk,
+        transaction_id,
+        load_timestamp,
+        record_source
+      FROM raw_sf.hub_transaction
+      LIMIT 100;
+      ```
+    meta:
+      owner: "@dataops_team"
+    columns:
+      - name: transaction_hk
+        description: Unique hash key for the transaction.
+        data_tests: [not_null, unique]
+
+      - name: transaction_id
+        description: Natural business key.
+        data_tests:
+          - not_null
+
+      - name: load_timestamp
+        description: Timestamp when the record was loaded.
+        data_tests: [not_null]
+
+      - name: record_source
+        description: Source system of the record.
+        data_tests: [not_null]
+
+  - name: hub_news
+    description: Hub for news events related to assets.
+      ```sql
+      SELECT
+        news_hk,
+        url,
+        load_timestamp,
+        record_source
+      FROM raw_sf.hub_news
+      LIMIT 100;
+      ```
+    meta:
+      owner: "@dataops_team"
+    columns:
+      - name: news_hk
+        description: Unique hash key for the news event.
+        data_tests: [not_null, unique]
+
+      - name: url
+        description: Natural business key.
+        data_tests:
+          - not_null
+          - relationships:
+              to: source('raw_pg', 'raw_news')
+              field: url
+
+      - name: load_timestamp
+        description: Timestamp when the record was loaded.
+        data_tests: [not_null]
+
+      - name: record_source
+        description: Source system of the record.
+        data_tests: [not_null]
+  
+  - name: ephemeral_news
+    description: Ephemeral table to deduplicate news events related to assets.
+      ```sql
+      SELECT
+        ticker,
+        asset_type,
+        url,
+        date,
+        load_timestamp,
+        source,
+        title,
+        description,
+        image,
+        ROW_NUMBER() OVER (
+          PARTITION BY ticker, asset_type, url
+          ORDER BY load_timestamp DESC
+        ) AS rn
+      FROM raw_sf.raw_news (where rn =1)
+      ```
+    meta:
+      owner: "@dataops_team"
+    columns:
+      - name: ticker
+        description: Ticker symbol related to the news.
+        data_tests: [not_null]
+      - name: asset_type
+        description: Type of asset (crypto or stock).
+        data_tests: [not_null]
+      - name: url
+        description: URL of the news article.
+        data_tests: [not_null]
+      - name: date
+        description: Publication date of the news article.
+      - name: load_timestamp
+        description: Timestamp when the record was loaded.
+        data_tests: [not_null]
+      - name: source
+        description: Source of the news article.
+        data_tests: [not_null]
+      - name: title
+        description: Title of the news article.
+        data_tests: [not_null]
+      - name: description
+        description: Description or summary of the news article.
+      - name: image
+        description: URL of the image associated with the news article.
+      - name: rn
+        description: Row number for deduplication.
+  
+  - name: hub_company
+    description: Hub for companies associated with stock assets.
+      ```sql
+      SELECT
+        company_hk,
+        company_id,
+        load_timestamp,
+        record_source
+      FROM raw_sf.hub_company
+      LIMIT 100;
+      ```
+    meta:
+      owner: "@dataops_team"
+    columns:
+      - name: company_hk
+        description: Unique hash key for the company.
+        data_tests: [not_null, unique]
+
+      - name: company_id
+        description: Natural business key.
+        data_tests:
+          - not_null
+          - relationships:
+              to: source('raw_pg', 'raw_corporates')
+              field: company_id
+
+      - name: load_timestamp
+        description: Timestamp when the record was loaded.
+        data_tests: [not_null]
+
+      - name: record_source
+        description: Source system of the record.
+        data_tests: [not_null]
+  # ======================
+  # LINKS
+  # ======================
+
+  - name: link_customer_transaction
+    description: Relationship between customers and transactions.
+      ```sql
+      SELECT
+        customer_transaction_hk,
+        customer_hk,
+        transaction_hk,
+        load_timestamp,
+        record_source
+      FROM raw_sf.link_customer_transaction
+      LIMIT 100;
+      ```
+    meta:
+      owner: "@dataops_team"
+    columns:
+      - name: customer_transaction_hk
+        description: Unique hash key for the customer-transaction link.
+        data_tests: [not_null, unique]
+
+      - name: customer_hk
+        description: Foreign key to the customer hub.
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('hub_customer')
+              field: customer_hk
+
+      - name: transaction_hk
+        description: Foreign key to the transaction hub.
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('hub_transaction')
+              field: transaction_hk
+
+      - name: load_timestamp
+        description: Timestamp when the record was loaded.
+        data_tests: [not_null]
+
+      - name: record_source
+        description: Source system of the record.
+        data_tests: [not_null]
+
+  - name: link_transaction_asset
+    description: Relationship between transactions and traded assets.
+      ```sql
+      SELECT
+        transaction_asset_hk,
+        transaction_hk,
+        asset_hk,
+        load_timestamp
+      FROM raw_sf.link_transaction_asset
+      LIMIT 100;
+      ```
+    meta:
+      owner: "@dataops_team"
+    columns:
+      - name: transaction_asset_hk
+        description: Unique hash key for the transaction-asset link.
+        data_tests: [not_null, unique]
+
+      - name: transaction_hk
+        description: Foreign key to the transaction hub.
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('hub_transaction')
+              field: transaction_hk
+
+      - name: asset_hk
+        description: Foreign key to the asset hub.
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('hub_asset')
+              field: asset_hk
+
+      - name: load_timestamp
+        description: Timestamp when the record was loaded.
+        data_tests: [not_null]
+
+  - name: link_news_asset
+    description: Relationship between news and traded assets.
+      ```sql
+      SELECT
+        news_asset_hk,
+        news_hk,
+        asset_hk,
+        load_timestamp,
+        record_source
+      FROM raw_sf.link_news_asset
+      LIMIT 100;
+      ```
+    meta:
+      owner: "@dataops_team"
+    columns:
+      - name: news_asset_hk
+        description: Unique hash key for the news-asset link.
+        data_tests: [not_null, unique]
+
+      - name: news_hk
+        description: Foreign key to the news hub.
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('hub_news')
+              field: news_hk
+
+      - name: asset_hk
+        description: Foreign key to the asset hub.
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('hub_asset')
+              field: asset_hk
+
+      - name: load_timestamp
+        description: Timestamp when the record was loaded.
+        data_tests: [not_null]
+
+      - name: record_source
+        description: Source system of the record.
+        data_tests: [not_null] 
+
+  - name: link_customer_company
+    description: Relationship between customers and companies.
+      ```sql
+      SELECT
+        customer_company_hk,
+        customer_hk,
+        company_hk,
+        load_timestamp,
+        record_source
+      FROM raw_sf.link_customer_company
+      LIMIT 100;
+      ```
+    meta:
+      owner: "@dataops_team"
+    columns:
+      - name: customer_company_hk
+        description: Unique hash key for the customer-company link.
+        data_tests: [not_null, unique]
+
+      - name: customer_hk
+        description: Foreign key to the customer hub.
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('hub_customer')
+              field: customer_hk
+
+      - name: company_hk
+        description: Foreign key to the company hub.
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('hub_company')
+              field: company_hk
+
+      - name: load_timestamp
+        description: Timestamp when the record was loaded.
+        data_tests: [not_null]
+
+      - name: record_source
+        description: Source system of the record.
+        data_tests: [not_null]
+
+  - name: link_company_transaction
+    description: Relationship between companies and transactions.
+      ```sql
+      SELECT
+        company_transaction_hk,
+        company_hk,
+        transaction_hk,
+        load_timestamp,
+        record_source
+      FROM raw_sf.link_company_transaction
+      LIMIT 100;
+      ```
+    meta:
+      owner: "@dataops_team"
+    columns:
+      - name: company_transaction_hk
+        description: Unique hash key for the company-transaction link.
+        data_tests: [not_null, unique]
+
+      - name: company_hk
+        description: Foreign key to the company hub
+        data_tests: [not_null]
+        data_tests:
+          - relationships:
+              to: ref('hub_company')
+              field: company_hk
+
+      - name: transaction_hk
+        description: Foreign key to the transaction hub.
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('hub_transaction')
+              field: transaction_hk
+
+      - name: load_timestamp
+        description: Timestamp when the record was loaded.
+        data_tests: [not_null]
+
+      - name: record_source
+        description: Source system of the record.
+        data_tests: [not_null]
+
+  # ======================
+  # SATELLITES
+  # ======================
+
+  - name: sat_customer_profile
+    description: Descriptive attributes of customers.
+      ```sql
+      SELECT
+        customer_hk,
+        cusomer_id,
+        first_name,
+        last_name,
+        email,
+        country,
+        customer_tier,
+        risk_tolerance,
+        registration_date,
+        company_id,
+        record_source,
+        load_timestamp,
+        hashdiff
+      FROM raw_sf.sat_customer_profile
+      LIMIT 100;
+      ```
+    meta:
+      owner: "@dataops_team"
+    columns:
+      - name: customer_hk
+        description: Foreign key to the customer hub.
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('hub_customer')
+              field: customer_hk
+      - name: customer_id
+        description: Natural business key.
+        data_tests:
+          - not_null
+          - relationships:
+              to: source('raw_pg', 'raw_customers')
+              field: customer_id
+      - name: first_name
+        description: Customer's first name.
+      - name: last_name
+        description: Customer's last name.
+      - name: email
+        description: Customer's email address.
+      - name: country
+        description: Customer's country of residence.
+      - name: customer_tier
+        description: Tier level of the customer (e.g., Gold, Silver).
+      - name: risk_tolerance
+        description: Risk tolerance level of the customer.
+      - name: registration_date
+        description: Date when the customer registered.
+      - name: company_id
+        description: Company ID if the customer is associated with a company.
+      - name: record_source
+        description: Source system of the record.
+        data_tests: [not_null]
+      - name: load_timestamp
+        description: Timestamp when the record was loaded.
+        data_tests: [not_null]
+      - name: hashdiff
+        description: Hash difference for change tracking.
+        data_tests: [not_null]
+
+  - name: sat_asset_price_crypto
+    description: crypto prices satellite from various sources.
+      ```sql
+      SELECT
+        asset_hk,
+        observed_at,
+        price,
+        volume,
+        load_timestamp,
+        record_source
+      FROM raw_sf.sat_asset_price_crypto
+      LIMIT 100;
+      ```
+    meta:
+      owner: "@dataops_team"
+    data-tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - asset_hk
+            - observed_at
+            - record_source
+            - hashdiff
+
+    columns:
+      - name: asset_hk
+        description: Foreign key to the asset hub.
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('hub_asset')
+              field: asset_hk
+
+      - name: observed_at
+        description: Timestamp when the price was observed.
+        data_tests: [not_null]
+
+      - name: price
+        description: Observed price of the crypto asset.
+      - name: volume
+        description: Trading volume of the crypto asset.
+
+      - name: load_timestamp
+        description: Timestamp when the record was loaded.
+        data_tests: [not_null]
+
+      - name: record_source
+        description: Source system of the record.
+        data_tests: [not_null]
+
+  - name: sat_asset_price_stock
+    description: stock prices satellite from various sources.
+      ```sql
+      SELECT
+        asset_hk,
+        asset_symbol,
+        asset_type,
+        open_price,
+        high_price,
+        low_price,
+        close_price,
+        adj_close_price,
+        volume,
+        dividends,
+        stock_splits,
+        market_cap,
+        pe_ratio,
+        week_52_high,
+        week_52_low,
+        avg_volume,
+        record_source,
+        observed_at,
+        load_timestamp
+      FROM raw_sf.sat_asset_price_stock
+      LIMIT 100;
+      ```
+    meta:
+      owner: "@dataops_team"
+    columns:
+      - name: asset_hk
+        description: Foreign key to the asset hub.
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('hub_asset')
+              field: asset_hk
+
+      - name: asset_symbol
+        description: Ticker symbol for the stock asset.
+        data_tests: [not_null]
+
+      - name: asset_type
+        description: Type of asset (should be 'stock').
+        data_tests: [not_null]
+
+      - name: open_price
+        description: Opening price of the stock.
+      - name: high_price
+        description: Highest price of the stock during the trading period.
+      - name: low_price
+        description: Lowest price of the stock during the trading period.
+      - name: close_price
+        description: Closing price of the stock.
+      - name: adj_close_price
+        description: Adjusted closing price of the stock.
+      - name: volume
+        description: Trading volume of the stock.
+      - name: dividends
+        description: Dividend amount if applicable.
+      - name: stock_splits
+        description: Stock split ratio if applicable.
+      - name: market_cap
+        description: Market capitalization of the company.
+      - name: pe_ratio
+        description: Price-to-earnings ratio of the stock.
+      - name: week_52_high
+        description: 52-week high price of the stock.
+      - name: week_52_low
+        description: 52-week low price of the stock.
+      - name: avg_volume
+        description: Average trading volume of the stock.
+      - name: record_source
+        description: Source system of the record.
+        data_tests: [not_null]
+      - name: observed_at
+        description: Timestamp when the price was observed.
+        data_tests: [not_null]
+      - name: load_timestamp
+        description: Timestamp when the record was loaded.
+        data_tests: [not_null]
+
+  - name: sat_company_details
+    description: Company details for stock assets.
+      ```sql
+      SELECT
+        company_hk,
+        company_id,
+        company_name,
+        company_type,
+        company_email,
+        country,
+        year_founded,
+        tax_number,
+        office_primary_location,
+        registration_date,
+        record_source,
+        load_timestamp
+      FROM raw_sf.sat_company_details
+      LIMIT 100;
+      ```
+    meta:
+      owner: "@dataops_team"  
+    columns:
+      - name: company_hk
+        description: Foreign key to the company hub.
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('hub_company')
+              field: company_hk
+      - name: company_id
+        description: Natural business key.
+        data_tests:
+          - not_null
+          - relationships:
+              to: source('raw_pg', 'raw_corporates')
+              field: company_id
+      - name: company_name
+        description: Name of the company.
+      - name: company_type
+        description: Type of the company (e.g., Public, Private).
+      - name: company_email
+        description: Contact email of the company.
+      - name: country
+        description: Country where the company is located.
+      - name: year_founded
+        description: Year when the company was founded.
+      - name: tax_number
+        description: Tax identification number of the company.
+      - name: office_primary_location
+        description: Primary office location of the company.
+      - name: registration_date
+        description: Date when the company was registered.
+      - name: record_source
+        description: Source system of the record.
+        data_tests: [not_null]
+      - name: load_timestamp
+        description: Timestamp when the record was loaded.
+        data_tests: [not_null]
+  
+  - name: sat_news_content
+    description: Descriptive attributes of news events.
+      ```sql
+      SELECT
+        news_hk,
+        url,
+        published_date,
+        title,
+        description,
+        image,
+        record_source,
+        load_timestamp,
+        hashdiff
+      FROM raw_sf.sat_news_content
+      LIMIT 100;
+      ```
+    meta:
+      owner: "@dataops_team"
+    columns:
+      - name: news_hk
+        description: Foreign key to the news hub.
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('hub_news')
+              field: news_hk
+      - name: url
+        description: Natural business key.
+        data_tests:
+          - not_null
+          - relationships:
+              to: source('raw_pg', 'raw_news')
+              field: url
+      - name: published_date
+        description: Date when the news was published.
+      - name: title
+        description: Title of the news article.
+      - name: description
+        description: Description or summary of the news article.
+      - name: image
+        description: URL of the image associated with the news article.
+      - name: record_source
+        description: Source system of the record.
+        data_tests: [not_null]
+      - name: load_timestamp
+        description: Timestamp when the record was loaded.
+        data_tests: [not_null]
+      - name: hashdiff
+        description: Hash difference for change tracking.
+        data_tests: [not_null]
+  
+  - name: sat_transaction_corp
+    description: Corporate actions related to transactions.
+      ```sql
+      SELECT
+        transaction_hk,
+        transaction_id,
+        customer_id,
+        asset_type,
+        asset_symbol,
+        transaction_type,
+        quantity,
+        price_per_unit,
+        transaction_amount,
+        fee_amount,
+        transaction_timestamp,
+        data_date,
+        customer_tier,
+        customer_risk_tolerance,
+        customer_type,
+        data_source,
+        record_source
+      FROM raw_sf.sat_transaction_corp
+      LIMIT 100;
+      ```
+    meta:
+      owner: "@dataops_team"
+    columns:
+      - name: transaction_hk
+        description: Foreign key to the transaction hub.
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('hub_transaction')
+              field: transaction_hk
+      - name: transaction_id
+        description: id of transaction
+      - name: customer_id
+        description: id of customer
+      - name: asset_type
+        description: asset type (stock, crypto)
+      - name: asset_symbol
+        description: ticker symbol of asset (BTC, USD)
+      - name: transaction_type
+        description: buy, sell type of transaction
+      - name: quantity
+        description: number of assets bought
+      - name: price_per_unit
+        description: price per unit
+      - name: transaction_amount
+        description: transaction amount
+      - name: fee_amount
+        description: fee amount
+      - name: transaction_timestamp
+        description: transaction timestamp
+      - name: data_date
+        description: data date
+      - name: customer_tier
+        description: customer tier
+      - name: customer_risk_tolerance
+        description: customer risk tolerance
+      - name: customer_type
+        description: customer type
+      - name: data_source
+        description: data source
+      - name: record_source
+        description: record source
+        data_tests: [not_null]
+
+  - name: sat_transaction_personal
+    description: Personal customer transactions.
+      ```sql
+      SELECT
+        transaction_hk,
+        transaction_id,
+        customer_id,
+        asset_type,
+        asset_symbol,
+        transaction_type,
+        quantity,
+        price_per_unit,
+        transaction_amount,
+        fee_amount,
+        transaction_timestamp,
+        data_date,
+        customer_tier,
+        customer_risk_tolerance,
+        customer_type,
+        data_source,
+        record_source
+      FROM raw_sf.sat_transaction_personal
+      LIMIT 100;
+      ```
+    meta:
+      owner: "@dataops_team"
+    columns:
+      - name: transaction_hk
+        description: Foreign key to the transaction hub.
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('hub_transaction')
+              field: transaction_hk
+      - name: transaction_id
+        description: id of transaction
+      - name: customer_id
+        description: id of customer
+      - name: asset_type
+        description: asset type (stock, crypto)
+      - name: asset_symbol
+        description: ticker symbol of asset (BTC, USD)
+      - name: transaction_type
+        description: buy, sell type of transaction
+      - name: quantity
+        description: number of assets bought
+      - name: price_per_unit
+        description: price per unit
+      - name: transaction_amount
+        description: transaction amount
+      - name: fee_amount
+        description: fee amount
+      - name: transaction_timestamp
+        description: transaction timestamp
+      - name: data_date
+        description: data date
+      - name: customer_tier
+        description: customer tier
+      - name: customer_risk_tolerance
+        description: customer risk tolerance
+      - name: customer_type
+        description: customer type
+      - name: data_source
+        description: data source
+      - name: record_source
+        description: record source
+  - name: ephemeral_sat_transaction_full
+    description: Ephemeral table to combine corporate and personal transaction satellites.
+      ```sql
+      SELECT
+        transaction_hk,
+        transaction_id,
+        customer_id,
+        asset_type,
+        asset_symbol,
+        transaction_type,
+        quantity,
+        price_per_unit,
+        transaction_amount,
+        fee_amount,
+        transaction_timestamp,
+        data_date,
+        customer_tier,
+        customer_risk_tolerance,
+        customer_type,
+        data_source,
+        record_source
+      FROM ephemeral_sat_transaction_full
+      LIMIT 100;
+      ```
+    meta:
+      owner: "@dataops_team"
+    columns:
+      - name: transaction_hk
+        description: Foreign key to the transaction hub.
+        data_tests:
+          - not_null
+      - name: transaction_id
+        description: id of transaction
+      - name: customer_id
+        description: id of customer
+      - name: asset_type
+        description: asset type (stock, crypto)
+      - name: asset_symbol
+        description: ticker symbol of asset (BTC, USD)
+      - name: transaction_type
+        description: buy, sell type of transaction
+      - name: quantity
+        description: number of assets bought
+      - name: price_per_unit
+        description: price per unit
+      - name: transaction_amount
+        description: transaction amount
+      - name: fee_amount
+        description: fee amount
+      - name: transaction_timestamp
+        description: transaction timestamp
+      - name: data_date
+        description: data date
+      - name: customer_tier
+        description: customer tier
+      - name: customer_risk_tolerance
+        description: customer risk tolerance
+      - name: customer_type
+        description: customer type
+      - name: data_source
+        description: data source
+      - name: record_source
+        description: record source

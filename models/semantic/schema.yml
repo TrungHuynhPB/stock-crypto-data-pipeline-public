@@ -1,0 +1,161 @@
+version: 2
+
+models:
+
+  # ======================
+  # SEMANTIC MODELS
+  # ======================
+
+  - name: semantic_asset_performance
+    description: >
+      Semantic model combining asset prices and transaction data to analyze performance.
+      ```sql
+      SELECT
+          asset_symbol,
+          asset_type,
+          asset_class,
+          price_date,
+          price_source,
+          price,
+          volume
+      FROM raw_sf.semantic_asset_performance
+      LIMIT 100;
+      ```
+    meta:
+      owner: "@dataops_team"
+    columns:
+      - name: asset_symbol
+        description: Name, symbol of the asset.
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('fct_asset_prices')
+              field: asset_symbol
+      - name: asset_type
+        description: Type of the asset (e.g., Stock, Crypto).
+      - name: asset_class
+        description: Class of the asset (e.g., Equity, Cryptocurrency).
+      - name: price_date
+        description: Date of the price.
+      - name: price_source
+        description: Source of the price data.
+      - name: price
+        description: Price of the asset on the given date.
+      - name: volume
+        description: Trading volume of the asset on the given date.
+
+  - name: semantic_customer_overview
+    description: >
+      Semantic model providing an overview of customer demographics and purchasing behavior.
+      ```sql
+      SELECT
+          customer_hk,
+          customer_id,
+          first_name,
+          last_name,
+          email,
+          country,
+          customer_tier,
+          risk_tolerance,
+          total_transactions,
+          total_volume,
+          total_fees
+      FROM raw_sf.semantic_customer_overview
+      LIMIT 100;
+      ```
+    meta:
+      owner: "@dataops_team"
+    columns:
+      - name: customer_hk
+        description: Unique identifier for each customer.
+        data_tests:
+          - relationships:
+              to: ref('dim_customer')
+              field: customer_hk
+      - name: customer_id
+        description: Customer's identification number.
+      - name: first_name
+        description: Customer's first name.
+      - name: last_name
+        description: Customer's last name.
+      - name: email
+        description: Customer's email address.
+      - name: country
+        description: Country of residence of the customer.
+      - name: customer_tier
+        description: Tier level of the customer based on their activity.
+      - name: risk_tolerance
+        description: Risk tolerance level of the customer.
+      - name: total_transactions
+        description: Total number of transactions made by the customer.
+      - name: total_volume
+        description: Total volume of assets purchased by the customer.
+      - name: total_fees
+        description: Total fees paid by the customer.
+
+  - name: semantic_transactions
+    description: >
+      Semantic model detailing transaction records including types and amounts.
+      ```sql
+      SELECT
+          transaction_hk,
+          transaction_id,
+          transaction_timestamp,
+          data_date,
+          customer_id,
+          first_name,
+          last_name,
+          company_name,
+          email,
+          country,
+          customer_tier,
+          risk_tolerance,
+          asset_symbol,
+          asset_type,
+          transaction_type,
+          transaction_amount,
+          fee_amount
+      FROM raw_sf.semantic_transactions
+      LIMIT 100;
+      ```
+    meta:
+      owner: "@dataops_team"
+    columns:
+      - name: transaction_hk
+        description: Unique identifier for each transaction.
+        data_tests:
+          - relationships:
+              to: ref('hub_transaction')
+              field: transaction_hk
+      - name: transaction_id
+        description: Transaction identification number.
+      - name: transaction_timestamp
+        description: Timestamp of when the transaction occurred.
+      - name: data_date
+        description: Date associated with the transaction data.
+      - name: customer_id
+        description: Customer's identification number involved in the transaction.
+      - name: first_name
+        description: First name of the customer involved in the transaction.
+      - name: last_name
+        description: Last name of the customer involved in the transaction.
+      - name: company_name
+        description: Company name associated with the customer.
+      - name: email
+        description: Email address of the customer involved in the transaction.
+      - name: country
+        description: Country of residence of the customer involved in the transaction.
+      - name: customer_tier
+        description: Tier level of the customer based on their activity.
+      - name: risk_tolerance
+        description: Risk tolerance level of the customer.
+      - name: asset_symbol
+        description: Symbol of the asset involved in the transaction.
+      - name: asset_type
+        description: Type of asset involved in the transaction.
+      - name: transaction_type
+        description: Type of transaction (e.g., buy, sell).
+      - name: transaction_amount
+        description: Amount involved in the transaction.
+      - name: fee_amount
+        description: Fee amount associated with the transaction.

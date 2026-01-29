@@ -1,0 +1,17 @@
+# dbt specific directories
+target/
+dbt_packages/
+macros/
+
+# Non-dbt SQL files
+scripts/
+.venv/
+logs/
+seeds/
+# Generated files
+*.pyc
+__pycache__/
+docs/ERD/ERD_1.sql
+docs/
+# backup drafts
+backup/

@@ -1,0 +1,51 @@
+market_data_pipeline:
+  #target: ci-snowflake
+  outputs:
+    dev-snowflake:
+      type: snowflake
+      account: "{{env_var('SNOWFLAKE_ACCOUNT')}}"
+      user: "{{ env_var('SNOWFLAKE_USER') }}"
+      role: "{{ env_var('SNOWFLAKE_ROLE') }}"
+      warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE') }}"
+      database: "{{ env_var('SNOWFLAKE_DATABASE') }}"
+      schema: "{{ env_var('SNOWFLAKE_SCHEMA') }}"
+      private_key_path: "{{ env_var('SNOWFLAKE_PRIVATE_KEY_FILE_PATH')}}"
+      #private_key_passphrase: "{{ env_var('SNOWFLAKE_PRIVATE_KEY_FILE_PWD')}}"
+      threads: 8
+
+    dev-trino:
+      type: trino
+      host: "{{ env_var('TRINO_HOST', 'localhost') }}"
+      port: 8080 #"{{ env_var('TRINO_PORT', 8080) }}"
+      user: "{{ env_var('TRINO_USER', 'trino') }}"
+      catalog: "{{ env_var('TRINO_CATALOG', 'sc_sf') }}"
+      schema: "{{ env_var('TRINO_SCHEMA', 'sc_t23') }}"
+      method: none
+      http_scheme: "{{ env_var('TRINO_HTTP_SCHEME', 'http') }}"
+      threads: 6
+
+
+    ci-snowflake:
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE') }}"
+      database: "{{ env_var('SNOWFLAKE_DATABASE') }}"
+      role: "{{ env_var('SNOWFLAKE_ROLE') }}"
+      schema: "{{ env_var('SNOWFLAKE_SCHEMA') }}"
+      user: "{{ env_var('SNOWFLAKE_USER') }}"
+      private_key: "{{ env_var('SNOWFLAKE_USER_PRIVATE_KEY') }}"
+      #password: "{{ env_var('SNOWFLAKE_USER_PASSWORD') }}"
+      #private_key_path: "{{ env_var('SNOWFLAKE_PRIVATE_KEY_FILE_PATH') }}"
+      #private_key_passphrase: "{{ env_var('SNOWFLAKE_PRIVATE_KEY_FILE_PWD') }}"
+      threads: 8
+
+    ci-trino:
+      type: trino
+      host: "{{ env_var('TRINO_HOST', 'localhost') }}"
+      port: 8080 #"{{ env_var('TRINO_PORT', 8080) }}"
+      user: "{{ env_var('TRINO_USER', 'trino') }}"
+      catalog: "{{ env_var('TRINO_CATALOG', 'sc_sf') }}"
+      schema: "{{ env_var('TRINO_SCHEMA', 'sc_t23') }}"
+      method: none
+      http_scheme: "{{ env_var('TRINO_HTTP_SCHEME', 'http') }}"
+      threads: 6

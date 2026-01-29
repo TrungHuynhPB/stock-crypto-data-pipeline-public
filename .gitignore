@@ -1,0 +1,54 @@
+# Data files - ignore all generated data
+*.json
+*.csv
+*.xlsx
+*.xlsm
+*.parquet
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment variables
+.env
+*.env
+
+# Logs
+*.log
+logs/
+
+# UV/Python virtual environment
+.venv/
+venv/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+#secrets
+secrets/
+*.p8
+*.pub
+docker-volume/
+
+#dbt
+.user.yml
+target/
+dbt_packages/
+
+#trino
+*.properties
+docker/trino/plugin/
+
+#backup files
+backup/
+
+#AI sample docs
+docs/sample_documents/

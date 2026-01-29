@@ -1,0 +1,70 @@
+[project]
+name = "fa-dae2-capstone-trunghpb"
+version = "0.1.0"
+description = "Data E2E project stock data market & news"
+readme = "README.md"
+requires-python = "==3.12.12"
+dependencies = [
+    "aiohttp>=3.12.15",
+    "boto3>=1.40.40",
+    "faker>=37.6.0",
+    "kafka-python>=2.0.2",
+    "karpet>=0.3",
+    "lxml>=5.4.0",
+    "minio>=7.2.18",
+    "pandas>=2.3.2",
+    "prefect>=3.4.22",
+    "prefect-aws>=0.5.16",
+    "prefect-snowflake>=0.28.5",
+    "prefect-dbt>=0.5.10",
+    "psycopg>=3.2.10",
+    "python-dotenv>=1.1.1",
+    "requests>=2.32.5",
+    "rich>=14.1.0",
+    "snowflake-connector-python[pandas]>=3.17.4",
+    "sqlalchemy>=2.0.43",
+    "tqdm>=4.67.1",
+    "dbt-core==1.8.2",
+    "dbt-snowflake==1.8.1",
+    "dbt-trino==1.8.2",
+    "yfinance>=0.2.66",
+    "sqlfluff>=3.4.2",
+    "sqlfluff-templater-dbt>=3.4.2",
+    "psycopg2-binary",
+    "dbterd>=1.22.0",
+    "financetoolkit>=2.0.6",
+    "langchain>=0.0.208",
+    "langchain-core>=0.1.0",
+    "langchain-openai>=0.0.5",
+    "langchain-community>=0.0.20",
+    "langchain-pinecone>=0.0.1",
+    "langchain-text-splitters>=0.0.1",
+    "pinecone-client>=3.0.0",
+    "openai>=1.12.0",
+    "pypdf>=4.0.0",
+    "anthropic>=0.18.0",
+    "dbt-score>=0.15.0",
+    "streamlit>=1.53.0",
+    "pillow>=12.1.0",
+    "pytesseract>=0.3.13",
+    "opencv-python>=4.11.0.86",
+    "numpy>=1.26.4",
+    "psycopg-binary>=3.3.2",
+    "langgraph>=1.0.5",
+    "langgraph-checkpoint-postgres>=3.0.3",
+]
+
+[tool.dbt]
+profile = "default"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.2",
+    "sqlfluff>=3.4.2",
+    "sqlfluff-templater-dbt>=3.4.2",
+    "pre-commit>=4.2.0",
+]
+
+[tool.dbt-score]
+fail_project_under = 7.5
+fail_any_item_under = 8.0

@@ -1,0 +1,85 @@
+# dbterd Configuration File (dbt Core)
+# CLI arguments take precedence over these settings
+# See https://dbterd.datnguyen.de for full documentation
+
+# Output Settings
+# ---------------
+# Target platform for diagram generation
+# Available options: dbml, mermaid, plantuml, graphviz, d2, drawdb
+target: dbml
+
+# Output directory path (default: ./target)
+output: /home/trunghpb/project/aifoundry/fa-dae2-capstone-trunghpb/target
+
+# Output file name (optional - defaults are defined per target)
+# Examples: schema.dbml, diagram.md, schema.puml
+# output-file-name: 
+
+# Selection & Filtering
+# ---------------------
+# Include specific models/resources (supports wildcards)
+select:
+  # - fct_*
+  # - dim_*
+
+# Exclude specific models/resources (supports wildcards)
+exclude:
+  # - stg_*
+
+# Resource types to include in diagram
+# Available options: model, source
+resource-type:
+  - model
+
+# Relationship Detection
+# ----------------------
+# Algorithm for detecting relationships between entities
+# Available options: test_relationship, semantic
+# - test_relationship: Parses relationships from dbt relationship tests or constraints (default)
+# - semantic: Parses relationships from dbt Semantic Layer entities (requires dbt v1.6+)
+algo: test_relationship
+
+# Entity Naming
+# -------------
+# Format for entity node names (dot-separated combination of keys)
+# Available keys: resource, package, model, database, schema, table
+# Common formats:
+# - resource.package.model (default)
+# - database.schema.table (fully qualified physical name)
+# - schema.table (schema and table name)
+# - table (table name only)
+entity-name-format: schema.table
+
+# Omit double quotes in entity names (dbml only)
+omit-entity-name-quotes: false
+
+# Display Options
+# ---------------
+# Omit columns in diagram (mermaid only)
+omit-columns: false
+
+# dbt Core Integration
+# --------------------
+# Path to dbt artifact directory (default: ./target)
+artifacts-dir: /home/trunghpb/project/aifoundry/fa-dae2-capstone-trunghpb/target
+
+# dbt manifest.json version (optional - auto-detected from metadata if not specified)
+# manifest-version: 12
+
+# dbt catalog.json version (optional - auto-detected from metadata if not specified)
+# catalog-version: 1
+
+# Flag to bypass Pydantic validation errors by ignoring extra fields
+bypass-validation: true
+
+# dbt project directory for programmatic invocation
+dbt-project-dir: .
+
+# Use dbt's selection syntax with programmatic invocation
+dbt: false
+
+# Auto-generate dbt artifacts before running
+dbt-auto-artifacts: false
+
+# dbt target name (optional - uses dbt's default target if not specified)
+# dbt-target: 

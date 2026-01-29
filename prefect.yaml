@@ -1,0 +1,67 @@
+# prefect.yaml
+
+# Generic metadata
+name: fa-dae2-capstone-trunghpb
+prefect-version: 2.14.12
+
+# A list of deployments for this project
+deployments:
+  - name: main-data-pipeline
+    entrypoint: scripts/flow/flow__main_data_pipeline.py:main_data_pipeline_flow
+    schedule:
+      cron: "0 20 * * *"
+      timezone: "Asia/Ho_Chi_Minh"
+    work_queue_name: default
+
+  - name: batch-data-pipeline
+    entrypoint: scripts/flow/flow__batch_data_s3_snowflake.py:batch_data_s3_snowflake
+    schedule:
+      cron: "0 20 * * *"
+      timezone: "Asia/Ho_Chi_Minh"
+    work_queue_name: default
+
+  - name: prices-crypto-pipeline
+    entrypoint: scripts/flow/flow__prices_data_s3_snowflake.py:prices_data_s3_snowflake_flow
+    schedule:
+      cron: "0 20 * * *"
+      timezone: "Asia/Ho_Chi_Minh"
+    work_queue_name: default
+
+  - name: prices-stock-pipeline
+    entrypoint: scripts/flow/flow__stock_prices_data_s3_snowflake.py:stock_prices_data_s3_snowflake_flow
+    schedule:
+      cron: "0 20 * * *"
+      timezone: "Asia/Ho_Chi_Minh"
+    work_queue_name: default
+
+  - name: trino-incremental-dbt-5min
+    entrypoint: scripts/data_generation/b1_1_trino_incremental_dbt.py:trino_incremental_dbt_flow
+    schedule:
+      cron: "*/5 * * * *"
+      timezone: "Asia/Ho_Chi_Minh"
+    work_queue_name: default
+
+  # - name: daily-stock-price-ingestion
+  #   entrypoint: scripts/flow/flow__daily_stock_price_ingestion.py:daily_stock_price_ingestion_flow
+  #   schedule:
+  #     cron: "0 8 * * *"
+  #     timezone: "UTC"
+  #   work_queue_name: default
+
+  # - name: daily-crypto-price-ingestion
+  #   entrypoint: scripts/flow/flow__daily_crypto_price_ingestion.py:daily_crypto_price_ingestion_flow
+  #   schedule:
+  #     cron: "0 8 * * *"
+  #     timezone: "UTC"
+  #   work_queue_name: default
+
+  # - name: daily-news-ingestion
+  #   entrypoint: scripts/flow/flow__daily_news_ingestion.py:daily_news_ingestion_flow
+  #   schedule:
+  #     cron: "0 8 * * *"
+  #     timezone: "UTC"
+  #   work_queue_name: default
+
+  # - name: generate-fake-market-data
+  #   entrypoint: scripts/data_generation/fake_transaction_generator.py:generate_fake_market_data_flow
+  #   work_queue_name: default

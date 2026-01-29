@@ -1,0 +1,28 @@
+selectors:
+  - name: trino
+    description: Trino-executed models
+    definition:
+      union:
+        - method: tag
+          value: trino
+
+  - name: snowflake
+    description: Snowflake-executed models
+    definition:
+      union:
+        - method: tag
+          value: snowflake
+
+  - name: semantic
+    description: Semantic view models on Snowflake
+    definition:
+      union:
+        - method: tag
+          value: semantic
+
+  - name: postgres
+    description: Postgres-executed models
+    definition:
+      union:
+        - method: tag
+          value: postgres

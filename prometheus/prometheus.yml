@@ -1,0 +1,59 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'capstone'
+    environment: 'development'
+
+scrape_configs:
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Kafka Exporter
+  - job_name: 'kafka-exporter'
+    static_configs:
+      - targets: ['kafka-exporter:9308']
+        labels:
+          service: 'kafka'
+          exporter: 'kafka-exporter'
+
+  # Postgres Exporter - TimescaleDB
+  - job_name: 'postgres-timescaledb'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+        labels:
+          service: 'postgres'
+          instance: 'timescaledb'
+
+  # Postgres Exporter - Prefect DB
+  - job_name: 'postgres-prefect-db'
+    static_configs:
+      - targets: ['postgres-exporter-prefect:9187']
+        labels:
+          service: 'postgres'
+          instance: 'prefect-db'
+
+  # Trino Health Check (HTTP endpoint - using blackbox exporter pattern)
+  # Note: Trino doesn't expose Prometheus metrics by default
+  # This is a simple HTTP check to verify Trino is responding
+  - job_name: 'trino-health'
+    metrics_path: '/v1/status'
+    static_configs:
+      - targets: ['trino:8080']
+        labels:
+          service: 'trino'
+          instance: 'trino-coordinator'
+    # Use a custom metric exporter or remove if not needed
+    # For now, we'll keep it but it won't expose Prometheus metrics
+
+  # Prefect API Health
+  - job_name: 'prefect'
+    metrics_path: '/api/health'
+    static_configs:
+      - targets: ['prefect:4200']
+        labels:
+          service: 'prefect'
+          instance: 'prefect-server'
+

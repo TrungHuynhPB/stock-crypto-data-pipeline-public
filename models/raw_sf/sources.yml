@@ -1,0 +1,875 @@
+version: 2
+# =========================
+# REUSABLE ANCHORS
+# =========================
+raw_corporates_columns: &raw_corporates_columns
+  - name: company_id
+    description: Unique identifier of the corporate entity.
+    data_tests: [not_null]
+
+  - name: company_name
+    description: Registered legal name of the company.
+
+  - name: company_type
+    description: Type of company (e.g. LLC, Corporation, Partnership).
+
+  - name: company_email
+    description: Primary contact email of the company.
+
+  - name: country
+    description: Country where the company is registered.
+
+  - name: year_founded
+    description: Year the company was founded.
+
+  - name: tax_number
+    description: Tax identification number of the company.
+
+  - name: office_primary_location
+    description: Primary office location of the company.
+
+  - name: registration_date
+    description: Official company registration date.
+
+  - name: load_timestamp
+    description: Timestamp when the record was loaded into the system.
+    data_tests: [not_null]
+
+
+crypto_columns: &crypto_columns
+  - name: symbol
+    description: Trading pair symbol (e.g. BTC-USD).
+    data_tests: [not_null]
+
+  - name: base_currency
+    description: Base currency of the trading pair.
+
+  - name: quote_currency
+    description: Quote currency of the trading pair.
+
+  - name: price
+    description: Observed market price.
+
+  - name: volume
+    description: Trading volume.
+
+  - name: source
+    description: Data provider source.
+    data_tests: [not_null]
+
+  - name: observed_at
+    description: Timestamp when the price was observed.
+    data_tests: [not_null]
+
+  - name: load_timestamp
+    description: Timestamp when the record was ingested.
+    data_tests: [not_null]
+
+
+raw_crypto_base: &raw_crypto_base
+  data_tests:
+    - dbt_utils.unique_combination_of_columns:
+        combination_of_columns: [symbol, observed_at]
+
+
+raw_news_columns: &raw_news_columns
+  - name: cryptocurrency
+    description: Crypto symbol referenced in the article.
+    data_tests: [not_null]
+
+  - name: url
+    description: URL of the news article.
+    data_tests: [not_null]
+
+  - name: title
+    description: Article title.
+
+  - name: description
+    description: Article summary.
+
+  - name: date
+    description: Publication timestamp.
+
+  - name: image
+    description: URL of the article image.
+
+raw_transactions_columns: &raw_transactions_columns
+  - name: transaction_id
+    description: Unique transaction identifier.
+    data_tests: [not_null, unique]
+
+  - name: customer_id
+    description: Customer identifier.
+
+  - name: asset_type
+    description: Asset class of the transaction.
+
+  - name: asset_symbol
+    description: Symbol of the traded asset.
+
+  - name: transaction_type
+    description: Buy or sell indicator.
+
+  - name: quantity
+    description: Quantity of the trade.
+
+  - name: price_per_unit
+    description: Price per unit of the asset.
+
+  - name: transaction_amount
+    description: Transaction amount.
+
+  - name: fee_amount
+    description: Fee charged for the transaction.
+
+  - name: transaction_timestamp
+    description: Timestamp of the transaction.
+
+  - name: data_date
+    description: Business date of the transaction.
+
+  - name: customer_tier
+    description: Customer tier at transaction time.
+
+  - name: customer_risk_tolerance
+    description: Customer risk tolerance at transaction time.
+
+  - name: customer_type
+    description: Customer classification.
+
+  - name: load_timestamp
+    description: Timestamp when the record was ingested.
+    data_tests: [not_null]
+
+  - name: data_source
+    description: Source system of the transaction data.
+    data_tests: [not_null]
+
+raw_stock_prices_columns: &raw_stock_prices_columns
+  - name: ticker
+    description: Stock ticker symbol.
+    data_tests: [not_null]
+
+  - name: date
+    description: Trading date.
+    data_tests: [not_null]
+
+  - name: open_price
+    description: Opening price.
+
+  - name: high_price
+    description: Highest price of the day.
+
+  - name: low_price
+    description: Lowest price of the day.
+
+  - name: close_price
+    description: Closing price.
+
+  - name: adj_close_price
+    description: Adjusted closing price.
+
+  - name: volume
+    description: Trading volume.
+
+  - name: dividends
+    description: Dividends paid.
+
+  - name: stock_splits
+    description: Stock split factor.
+
+  - name: company_name
+    description: Company name.
+
+  - name: sector
+    description: Industry sector.
+
+  - name: industry
+    description: Industry classification.
+
+  - name: market_cap
+    description: Market capitalization.
+
+  - name: pe_ratio
+    description: Price-to-earnings ratio.
+
+  - name: week_52_high
+    description: 52-week high price.
+
+  - name: week_52_low
+    description: 52-week low price.
+
+  - name: avg_volume
+    description: Average trading volume.
+
+  - name: source
+    description: Data provider source.
+
+  - name: observed_at
+    description: Timestamp when the data was observed.
+
+  - name: load_timestamp
+    description: Timestamp when the record was ingested.
+
+# =========================
+# SOURCES DEFINITION
+# =========================
+sources:
+  # =========================
+  # SNOWFLAKE SOURCE
+  # =========================
+  - name: raw_sf
+    description: >
+      Raw source tables stored in Snowflake (sc_sf.sc_t23).
+      These tables are ingested from multiple upstream systems
+      and represent untransformed, append-only raw data.
+
+    #database: db_t23
+    schema: sc_t23
+    tables:
+
+      # =========================
+      # CORPORATES
+      # =========================
+      - name: raw_corporates
+        description: >
+          Master data for corporate clients, including identification,
+          registration details, and country of operation.
+          ```sql
+          -- Example SQL query to select raw corporate data for a specific customer
+                    SELECT
+                        company_id,
+                        company_name,
+                        company_email,
+                        company_type,
+                        country,
+                        year_founded,
+                        tax_number,
+                        office_primary_location,
+                        registration_date,
+                        load_timestamp,
+                        source
+                    FROM
+                        raw_sf.raw_corporates
+                    WHERE
+                        customer_id = 'F5FFC2A902F4'
+                    ORDER BY
+                        load_timestamp DESC;
+          ```
+          # NOTE: Snowflake loader creates INGESTED_AT, but does NOT create `source`.
+          # (see scripts/data_generation/a1_4_batch_s3_to_snowflake.py)
+        meta:
+          owner: "@dataops_team"
+        columns: *raw_corporates_columns
+
+      # =========================
+      # CRYPTO PRICES
+      # =========================
+      - name: raw_cryptoprices_binance
+        description: >
+          Raw cryptocurrency price data sourced from Binance.
+          Data is time-series and append-only.
+          ```sql
+          -- Example SQL query to select raw crypto prices from Binance table
+          SELECT
+              symbol,
+              base_currency,
+              quote_currency,
+              price,
+              volume,
+              source,
+              observed_at,
+              load_timestamp
+          FROM
+              raw_sf.raw_cryptoprices_binance
+          WHERE
+              symbol = 'BTC-USD'
+          ORDER BY
+              load_timestamp DESC;
+          ```
+        meta:
+          owner: "@dataops_team"
+        columns: *crypto_columns
+        <<: *raw_crypto_base
+
+      - name: raw_cryptoprices_coingecko
+        description: Raw cryptocurrency price data sourced from CoinGecko.
+          ```sql
+          -- Example SQL query to select raw crypto prices from CoinGecko table
+          SELECT
+              symbol,
+              base_currency,
+              quote_currency,
+              price,
+              volume,
+              source,
+              observed_at,
+              load_timestamp
+          FROM
+              raw_sf.raw_cryptoprices_coingecko
+          WHERE
+              symbol = 'BTC-USD'
+          ORDER BY
+              load_timestamp DESC;
+          ```
+        meta:
+          owner: "@dataops_team"
+        <<: *raw_crypto_base 
+
+      - name: raw_cryptoprices_yfinance
+        description: >
+          Raw cryptocurrency price data sourced from Yahoo Finance.
+                ```sql
+                -- Example SQL query to select raw crypto prices from YFINANCE table
+                SELECT
+                    symbol,
+                    base_currency,
+                    quote_currency,
+                    price,
+                    volume,
+                    source,
+                    observed_at,
+                    load_timestamp
+                FROM
+                    raw_sf.raw_cryptoprices_yfinance
+                WHERE
+                    symbol = 'BTC-USD'
+                ORDER BY
+                    load_timestamp DESC;
+                ```
+        meta:
+          owner: "@dataops_team"
+        <<: *raw_crypto_base 
+
+      # =========================
+      # CUSTOMERS
+      # =========================
+      - name: raw_customers
+        description: >
+          Master data for retail and corporate customers,
+          including demographics, risk profile, and segmentation.
+          ```sql
+          -- Example SQL query to select raw customer data for a specific customer
+          SELECT
+              customer_id,
+              first_name,
+              last_name,
+              email,
+              gender,
+              age_group,
+              country,
+              registration_date,
+              customer_tier,
+              risk_tolerance,
+              customer_type,
+              company_id,
+              load_timestamp,
+              source
+          FROM raw_sf.raw_customers
+          WHERE
+              customer_id = 'F5FFC2A902F4'
+          ORDER BY
+              load_timestamp DESC;
+          ```
+        columns:
+          - name: customer_id
+            description: Unique identifier of the customer.
+            data_tests: [not_null]
+
+          - name: first_name
+            description: Customer first name.
+
+          - name: last_name
+            description: Customer last name.
+
+          - name: email
+            description: Customer email address.
+
+          - name: gender
+            description: Gender of the customer.
+
+          - name: age_group
+            description: Age group classification.
+
+          - name: country
+            description: Country of residence.
+
+          - name: registration_date
+            description: Date the customer registered.
+
+          - name: customer_tier
+            description: Customer tier or loyalty classification.
+
+          - name: risk_tolerance
+            description: Customer risk tolerance level.
+
+          - name: customer_type
+            description: Type of customer (retail or corporate).
+
+          - name: company_id
+            description: Associated corporate entity, if applicable.
+
+          - name: load_timestamp
+            description: Timestamp when the record was ingested.
+            data_tests: [not_null]
+          
+          - name: source
+            description: Source system of the customer data.
+            data_tests: [not_null]
+
+
+      # =========================
+      # NEWS
+      # =========================
+      - name: raw_news
+        description: >
+          Raw financial and market-related news articles.
+          ```sql
+          -- Example SQL query to select raw news articles related to selected cryptocurrency
+          SELECT
+              cryptocurrency,
+              url,
+              title,
+              description,
+              date,
+              image,
+              ingested_at
+          FROM
+              raw_sf.raw_news
+          WHERE
+              cryptocurrency = 'BTC'
+          ORDER BY
+              ingested_at DESC;
+          ```
+          # IMPORTANT: the Snowflake loader creates this table with the following columns
+          # (see scripts/data_generation/a1_4_batch_s3_to_snowflake.py):
+          # CRYPTOCURRENCY, URL, TITLE, DESCRIPTION, DATE, IMAGE, INGESTED_AT
+          # There is no `ticker`, `asset_type`, `load_timestamp`, or `source`.
+        meta:
+          owner: "@dataops_team"
+        config:
+          contract:
+            enforced: true
+        columns: *raw_news_columns
+
+      # =========================
+      # STOCK PRICES (YFINANCE)
+      # =========================
+      - name: raw_stock_prices_yfinance
+        description: >
+          Daily stock price and fundamental metrics sourced from Yahoo Finance.
+          ```sql
+          -- Example SQL query to select raw stock prices from YFINANCE table
+          SELECT
+              ticker,
+              date,
+              open_price,
+              high_price,
+              low_price,
+              close_price,
+              adj_close_price,
+              volume,
+              dividends,
+              stock_splits,
+              company_name,
+              sector,
+              industry,
+              market_cap,
+              pe_ratio,
+              week_52_high,
+              week_52_low,
+              avg_volume,
+              source,
+              observed_at,
+              load_timestamp
+          FROM
+              raw_sf.raw_stock_prices_yfinance
+          WHERE
+              ticker = 'AAPL'
+          ORDER BY
+              load_timestamp DESC;
+          ``` 
+        meta:
+          owner: "@dataops_team"
+        columns: *raw_stock_prices_columns
+        data_tests:
+          - dbt_utils.unique_combination_of_columns:
+              combination_of_columns: [ticker, date, observed_at]
+ 
+      # =========================
+      # TRANSACTIONS
+      # =========================
+      - name: raw_transaction_corporate
+        description: >
+          Raw corporate customer transaction records covering trades,
+          fees, and transaction metadata.
+          ```sql
+          -- Example SQL query to select raw transactions for a specific customer
+          SELECT
+              transaction_id,
+              customer_id,
+              asset_type,
+              asset_symbol,
+              transaction_type,
+              quantity,
+              price_per_unit,
+              transaction_amount,
+              fee_amount,
+              transaction_timestamp,
+              data_date,
+              customer_tier,
+              customer_risk_tolerance,
+              customer_type,
+              load_timestamp,
+              data_source
+          FROM
+              raw_sf.raw_transaction_coporate
+          WHERE
+              customer_id = 'CUST123456'
+          ORDER BY
+              load_timestamp DESC;
+          ```
+        meta:
+          owner: "@dataops_team"
+        columns: *raw_transactions_columns
+  
+      - name: raw_transaction_personal
+        description: >
+          Raw personal customer transaction records covering trades,
+          fees, and transaction metadata.
+          ```sql
+          -- Example SQL query to select raw transactions for a specific customer
+          SELECT
+              transaction_id,
+              customer_id,
+              asset_type,
+              asset_symbol,
+              transaction_type,
+              quantity,
+              price_per_unit,
+              transaction_amount,
+              fee_amount,
+              transaction_timestamp,
+              data_date,
+              customer_tier,
+              customer_risk_tolerance,
+              customer_type,
+              load_timestamp,
+              data_source
+          FROM
+              raw_sf.raw_transaction_personal
+          WHERE
+              customer_id = 'CUST123456'
+          ORDER BY
+              load_timestamp DESC;
+          ```
+        meta:
+          owner: "@dataops_team"
+        columns: *raw_transactions_columns
+
+  # =========================
+  # POSTGRES SOURCE
+  # =========================
+  # Trino Postgres catalog sources (sc_psql.public). Used when running dbt via Trino
+  # to transform/replicate data from Postgres into the Snowflake-backed catalog.
+  - name: raw_pg
+    description: Raw source tables stored in Postgres (sc_psql.public).
+    database: sc_psql
+    schema: public
+
+    tables:
+      - name: raw_cryptoprices_binance
+        description: >
+          Raw cryptocurrency price data sourced from Binance.
+          ```sql
+          -- Example SQL query to select raw crypto prices from Binance table
+          SELECT
+              symbol,
+              base_currency,
+              quote_currency,
+              price,
+              volume,
+              source,
+              observed_at,
+              load_timestamp
+          FROM
+              sc_psql.public.raw_cryptoprices_binance
+          WHERE
+              symbol = 'BTC-USD'
+          ORDER BY
+              load_timestamp DESC;
+          ```
+        meta:
+          owner: "@dataops_team"
+        columns: *crypto_columns
+      - name: raw_cryptoprices_coingecko
+        description: >
+          Raw cryptocurrency price data sourced from CoinGecko.
+          ```sql
+          -- Example SQL query to select raw crypto prices from CoinGecko table
+          SELECT
+              symbol,
+              base_currency,
+              quote_currency,
+              price,
+              volume,
+              source,
+              observed_at,
+              load_timestamp
+          FROM
+              sc_psql.public.raw_cryptoprices_coingecko
+          WHERE
+              symbol = 'BTC-USD'
+          ORDER BY
+              load_timestamp DESC;
+          ```
+        meta:
+          owner: "@dataops_team"
+        columns: *crypto_columns
+      - name: raw_cryptoprices_yfinance
+        description: >
+          Raw cryptocurrency price data sourced from Yahoo Finance.
+          ```sql
+          -- Example SQL query to select raw crypto prices from YFINANCE table
+          SELECT
+              symbol,
+              base_currency,
+              quote_currency,
+              price,
+              volume,
+              source,
+              observed_at,
+              load_timestamp
+          FROM
+              sc_psql.public.raw_cryptoprices_yfinance
+          WHERE
+              symbol = 'BTC-USD'
+          ORDER BY
+              load_timestamp DESC;
+          ```
+        meta:
+          owner: "@dataops_team"
+        columns: *crypto_columns
+      - name: raw_stock_prices_yfinance
+        description: >
+          Daily stock price and fundamental metrics sourced from Yahoo Finance.
+          ```sql
+          -- Example SQL query to select raw stock prices from YFINANCE table
+          SELECT
+              ticker,
+              date,
+              open_price,
+              high_price,
+              low_price,
+              close_price,
+              adj_close_price,
+              volume,
+              dividends,
+              stock_splits,
+              company_name,
+              sector,
+              industry,
+              market_cap,
+              pe_ratio,
+              week_52_high,
+              week_52_low,
+              avg_volume,
+              source,
+              observed_at,
+              load_timestamp
+          FROM
+              sc_psql.public.raw_stock_prices_yfinance
+          WHERE
+              ticker = 'AAPL'
+          ORDER BY
+              load_timestamp DESC;
+          ```
+        meta:
+          owner: "@dataops_team"
+        columns: *raw_stock_prices_columns
+      - name: raw_customers
+        description: > 
+          Master data for retail and corporate customers.
+          ```sql
+          -- Example SQL query to select raw customer data for a specific customer
+          SELECT
+              customer_id,
+              first_name,
+              last_name,
+              email,
+              gender,
+              age_group,
+              country,
+              registration_date,
+              customer_tier,
+              risk_tolerance,
+              customer_type,
+              company_id,
+              load_timestamp
+          FROM raw_pg.raw_customers
+          WHERE
+              customer_id = 'F5FFC2A902F4'
+          ORDER BY
+              load_timestamp DESC;
+          ```
+        meta:
+          owner: "@dataops_team"
+        columns:
+          - name: customer_id
+            description: Unique identifier of the customer.
+            data_tests: [not_null]
+
+          - name: first_name
+            description: Customer first name.
+
+          - name: last_name
+            description: Customer last name.
+
+          - name: email
+            description: Customer email address.
+
+          - name: gender
+            description: Gender of the customer.
+
+          - name: age_group
+            description: Age group classification.
+
+          - name: country
+            description: Country of residence.
+
+          - name: registration_date
+            description: Date the customer registered.
+
+          - name: customer_tier
+            description: Customer tier or loyalty classification.
+
+          - name: risk_tolerance
+            description: Customer risk tolerance level.
+
+          - name: customer_type
+            description: Type of customer (retail or corporate).
+
+          - name: company_id
+            description: Associated corporate entity, if applicable.
+
+          - name: load_timestamp
+            description: Timestamp when the record was ingested.
+            data_tests: [not_null]
+      - name: raw_corporates
+        description: >
+          Master data for corporate clients.
+          ```sql
+          -- Example SQL query to select raw corporate data for a specific customer
+                    SELECT
+                        company_id,
+                        company_name,
+                        company_email,
+                        company_type,
+                        country,
+                        year_founded,
+                        tax_number,
+                        office_primary_location,
+                        registration_date,
+                        load_timestamp,
+                        source
+                    FROM
+                        raw_pg.raw_corporates
+                    WHERE
+                        customer_id = 'F5FFC2A902F4'
+                    ORDER BY
+                        load_timestamp DESC;
+          ```
+        meta:
+          owner: "@dataops_team"
+        columns: *raw_corporates_columns
+      - name: raw_news
+        description: >
+          Raw financial and market-related news articles.
+          ```sql
+          -- Example SQL query to select raw news articles related to selected cryptocurrency
+          SELECT
+              cryptocurrency,
+              url,
+              title,
+              description,
+              date,
+              image,
+              ingested_at
+          FROM
+              raw_pg.raw_news
+          WHERE
+              cryptocurrency = 'BTC'
+          ORDER BY
+              ingested_at DESC;
+          ```
+        meta:
+          owner: "@dataops_team"
+        columns: *raw_news_columns
+
+      - name: raw_transaction_corporate
+        description: >
+          Raw corporate customer transaction records covering trades,
+          fees, and transaction metadata.
+          ```sql
+          -- Example SQL query to select raw transactions for a specific customer
+          SELECT
+              transaction_id,
+              customer_id,
+              asset_type,
+              asset_symbol,
+              transaction_type,
+              quantity,
+              price_per_unit,
+              transaction_amount,
+              fee_amount,
+              transaction_timestamp,
+              data_date,
+              customer_tier,
+              customer_risk_tolerance,
+              customer_type,
+              load_timestamp,
+              data_source
+          FROM
+              raw_sf.raw_transaction_corporate
+          WHERE
+              customer_id = 'CUST123456'
+          ORDER BY
+              load_timestamp DESC;
+          ```
+        meta:
+          owner: "@dataops_team"
+        columns: *raw_transactions_columns
+  
+      - name: raw_transaction_personal
+        description: >
+          Raw personal customer transaction records covering trades,
+          fees, and transaction metadata.
+          ```sql
+          -- Example SQL query to select raw transactions for a specific customer
+          SELECT
+              transaction_id,
+              customer_id,
+              asset_type,
+              asset_symbol,
+              transaction_type,
+              quantity,
+              price_per_unit,
+              transaction_amount,
+              fee_amount,
+              transaction_timestamp,
+              data_date,
+              customer_tier,
+              customer_risk_tolerance,
+              customer_type,
+              load_timestamp,
+              data_source
+          FROM
+              raw_sf.raw_transaction_personal
+          WHERE
+              customer_id = 'CUST123456'
+          ORDER BY
+              load_timestamp DESC;
+          ```
+        meta:
+          owner: "@dataops_team"
+        columns: *raw_transactions_columns

@@ -1,0 +1,164 @@
+name: dbt CI
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  dbt-test:
+    runs-on: ubuntu-latest
+    environment: ci
+    env:
+      PROJECT_DIR: .
+      DBT_PROFILES_DIR: ./profiles
+      SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+      SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+      SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+      SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+      SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
+      SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+      SNOWFLAKE_USER_PRIVATE_KEY: ${{ secrets.SNOWFLAKE_USER_PRIVATE_KEY }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch full history for state comparison
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: "pyproject.toml"
+
+      - name: Install uv and enable caching
+        uses: astral-sh/setup-uv@v1
+        with:
+          enable-cache: true
+
+      - name: Install the project
+        run: uv sync --all-extras --dev
+        working-directory: ${{ env.PROJECT_DIR }}
+
+      - name: Run dbt deps
+        run: uv run dbt deps
+        working-directory: ${{ env.PROJECT_DIR }}
+
+      - name: Generate baseline state from main branch
+        run: |
+          mkdir -p target/state
+          git fetch origin main:main
+          
+          # Save current branch name
+          CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+          
+          # Stash any uncommitted changes (e.g., uv.lock modified by uv sync)
+          # Use --include-untracked to catch any new files
+          if ! git diff --quiet || ! git diff --cached --quiet || [ -n "$(git ls-files --others --exclude-standard)" ]; then
+            echo "Stashing local changes before baseline generation..."
+            git stash push --include-untracked -m "CI: stash for baseline generation"
+            STASHED=true
+          else
+            STASHED=false
+          fi
+          
+          # Checkout main branch (force to handle any conflicts)
+          git checkout -f main --quiet
+          uv run dbt parse --target ci-snowflake
+          cp target/manifest.json target/state/manifest.json
+          
+          # Return to original branch
+          git checkout -f "$CURRENT_BRANCH" --quiet
+          
+          # Restore stashed changes if we stashed them
+          if [ "$STASHED" = "true" ]; then
+            echo "Restoring stashed changes..."
+            git stash pop --quiet || true
+          fi
+        working-directory: ${{ env.PROJECT_DIR }}
+
+      - name: Parse current branch
+        run: uv run dbt parse --target ci-snowflake
+        working-directory: ${{ env.PROJECT_DIR }}
+
+      - name: SQLFLUFF - Lint modified SQL files only
+        run: |
+          git fetch origin main
+          # Filter out deleted files (--diff-filter=d) - only lint files that exist
+          FILES=$(git diff --name-only --diff-filter=d origin/main...HEAD | grep -E '\.sql$' || true)
+          if [ -n "$FILES" ]; then
+            echo "Linting modified SQL files:"
+            echo "$FILES"
+            uv run sqlfluff lint $FILES
+          else
+            echo "No SQL files changed"
+          fi
+        working-directory: ${{ env.PROJECT_DIR }}
+        continue-on-error: false
+
+      - name: Check for modified models
+        id: check-modified
+        run: |
+          BASELINE_STATE_DIR=target/state
+          
+          # Check if there are any modified models using state comparison
+          # Count the number of modified models (excluding warnings/errors)
+          COUNT=$(uv run dbt ls \
+            --select state:modified+ \
+            --selector snowflake \
+            --resource-type model \
+            --state $BASELINE_STATE_DIR \
+            --target ci-snowflake \
+            --output name 2>/dev/null | \
+            grep -vE '^(Running|Registered|Found|The selection|No nodes|Encountered)' | \
+            grep -E '^[a-zA-Z_]' | wc -l || echo "0")
+          echo "Modified model count: $COUNT"
+          if [ "$COUNT" -gt 0 ]; then
+            echo "has_models=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_models=false" >> $GITHUB_OUTPUT
+          fi
+        working-directory: ${{ env.PROJECT_DIR }}
+
+      - name: Run dbt tests on modified models
+        if: steps.check-modified.outputs.has_models == 'true'
+        run: |
+          BASELINE_STATE_DIR=target/state
+          echo "Running dbt tests on modified models and their tests"
+          uv run dbt test \
+            --select state:modified+ \
+            --state $BASELINE_STATE_DIR \
+            --target ci-snowflake \
+            --selector snowflake
+        working-directory: ${{ env.PROJECT_DIR }}
+
+      - name: Get modified model names for dbt-score
+        id: modified-model-names
+        if: steps.check-modified.outputs.has_models == 'true'
+        run: |
+          BASELINE_STATE_DIR=target/state
+          
+          # Get only model names (not tests) for dbt-score
+          MODELS=$(uv run dbt ls \
+            --select state:modified+ \
+            --resource-type model \
+            --state $BASELINE_STATE_DIR \
+            --target ci-snowflake \
+            --output name 2>/dev/null | \
+            grep -vE '^(Running|Registered|Found|The selection|No nodes|Encountered)' | \
+            grep -E '^[a-zA-Z_]' | \
+            tr '\n' ' ' | xargs || echo "")
+          
+          if [ -n "$MODELS" ]; then
+            echo "models=$MODELS" >> $GITHUB_OUTPUT
+          fi
+        working-directory: ${{ env.PROJECT_DIR }}
+
+      - name: dbt-score - Lint modified models
+        if: steps.check-modified.outputs.has_models == 'true' && steps.modified-model-names.outputs.models != ''
+        run: |
+          MODELS="${{ steps.modified-model-names.outputs.models }}"
+          echo "Running dbt-score lint on: $MODELS"
+          uv run dbt-score lint \
+            -m target/manifest.json \
+            --select "$MODELS"
+        working-directory: ${{ env.PROJECT_DIR }}

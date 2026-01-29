@@ -1,0 +1,34 @@
+version: 2
+
+seeds:
+  - name: asset_info
+    description: >
+      Static reference table containing standardized metadata for financial
+      assets. This seed is used to classify and enrich transactional and price
+      data with consistent asset attributes such as asset type, category,
+      class, market capitalization, and sector.
+
+    meta:
+      owner: "@dataops_team"
+
+    columns:
+      - name: asset_symbol
+        description: Unique ticker or symbol identifying the asset (e.g. AAPL, MSFT).
+
+      - name: asset_type
+        description: High-level asset type (e.g. STOCK, CRYPTO).
+
+      - name: asset_name
+        description: Official name of the asset or issuing company.
+
+      - name: asset_category
+        description: Broad market category the asset belongs to (e.g. Stock Market).
+
+      - name: asset_class
+        description: Financial classification of the asset (e.g. Equity).
+
+      - name: market_cap_category
+        description: Market capitalization classification (e.g. Large Cap, Mid Cap).
+
+      - name: sector
+        description: Economic sector associated with the asset (e.g. Technology).

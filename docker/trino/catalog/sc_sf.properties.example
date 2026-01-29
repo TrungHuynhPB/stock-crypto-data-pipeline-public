@@ -1,0 +1,8 @@
+connector.name=snowflake
+connection-url=jdbc:snowflake://snowflakeaccount.us-west-2.snowflakecomputing.com/?user=snowflakeuser&warehouse=snowflakewarehouse&db=snowflakedb&schema=snowflakeschema&private_key_file=/secrets/rsa_key.p8
+connection-user=snowflakeuser
+connection-password=na
+snowflake.account=snowflakeaccount
+snowflake.database=snowflakedb
+snowflake.role=snowflakerole
+snowflake.warehouse=snowflakewarehouse

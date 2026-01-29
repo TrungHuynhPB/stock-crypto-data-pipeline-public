@@ -1,0 +1,44 @@
+name: 'market_data_pipeline'
+version: '1.0.0'
+config-version: 2
+
+profile: 'market_data_pipeline'
+
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+docs-paths: ["docs"]
+
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+quoting:
+  database: false
+  schema: false
+  identifier: false
+
+models:
+  market_data_pipeline:
+    #+views_enabled: false
+    #+database: "{{ env_var('SNOWFLAKE_DATABASE') }}"
+    #+schema: "{{ env_var('SNOWFLAKE_SCHEMA') }}"
+    raw_sf:
+      +materialized: incremental
+    #staging:
+      # +materialized: incremental
+      # +schema: stage
+    marts:
+      +schema: mart
+    warehouse:
+      +materialized: incremental
+      +schema: wh
+    semantic:
+      +materialized: view
+      +schema: sem
+
+
